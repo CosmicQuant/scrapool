@@ -13,10 +13,10 @@ from urllib.parse import urljoin, urlparse
 
 class ImageSpider(scrapy.Spider):
     name = 'image_spider'
-    start_urls = ['https://example.com/']  # Change this to your target website
+    start_urls = ['https://www.whats-on-mombasa.com/']
     
     # Allowed domains to prevent crawling external sites
-    allowed_domains = ['example.com', 'www.example.com']  # Change this to your target domain
+    allowed_domains = ['whats-on-mombasa.com', 'www.whats-on-mombasa.com']
     
     def __init__(self):
         super().__init__()
@@ -41,7 +41,7 @@ class ImageSpider(scrapy.Spider):
         'CLOSESPIDER_PAGECOUNT': 20,  # STOP after processing 20 pages
         'CLOSESPIDER_ITEMCOUNT': 100,  # STOP after finding 100 images
         'DUPEFILTER_DEBUG': True,  # Debug duplicate filtering
-        'WAIFU2X_PATH': 'waifu2x-ncnn-vulkan.exe'  # Path to waifu2x executable - CHANGE THIS
+        'WAIFU2X_PATH': r'c:\Users\ADMIN\Desktop\waifu2x-ncnn-vulkan-20250504-windows\waifu2x-ncnn-vulkan-20250504-windows\waifu2x-ncnn-vulkan.exe'  # Path to waifu2x executable
     }
 
     def load_image_status(self):
