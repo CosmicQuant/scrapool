@@ -8,10 +8,12 @@ import os
 import time
 import logging
 import subprocess
+import re
 from pathlib import Path
 from random import uniform
 from collections import deque
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 import scrapy
 from scrapy.pipelines.images import ImagesPipeline
 from scrapy.exceptions import DropItem
@@ -47,12 +49,15 @@ class EnhancedImagePipeline(ImagesPipeline):
         self.previously_downloaded = set()  # Set of URLs for quick lookup
         self.new_images = []  # List to track paths of newly downloaded images
         
+        # Set up base directory for all pipeline files
+        self.base_dir = Path(__file__).parent  # This will be image_scraper/ directory
+        
         # Set up logging
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
         
-        # File handler
-        log_file = 'image_pipeline.log'
+        # File handler - use absolute path in image_scraper directory
+        log_file = self.base_dir / 'image_pipeline.log'
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.INFO)
         file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -88,8 +93,9 @@ class EnhancedImagePipeline(ImagesPipeline):
 
     def load_image_status(self):
         """Load status of all processed images."""
+        status_file = self.base_dir / 'image_status.json'
         try:
-            with open('image_status.json', 'r') as f:
+            with open(status_file, 'r') as f:
                 data = json.load(f)
                 self.image_status = data.get('images', {})
                 
@@ -107,7 +113,8 @@ class EnhancedImagePipeline(ImagesPipeline):
 
     def save_image_status(self):
         """Save status of all processed images."""
-        with open('image_status.json', 'w') as f:
+        status_file = self.base_dir / 'image_status.json'
+        with open(status_file, 'w') as f:
             json.dump({
                 'images': self.image_status,
                 'last_updated': datetime.now().isoformat(),
@@ -244,8 +251,60 @@ class EnhancedImagePipeline(ImagesPipeline):
             time.sleep(uniform(0.5, 1.5))
             yield request
 
+    def file_path(self, request, response=None, info=None, *, item=None):
+        """Generate a meaningful filename with domain prefix and original name."""
+        url = request.url
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc
+        
+        # Extract original filename from URL
+        original_filename = Path(parsed_url.path).name
+        
+        # If no filename in URL, create one from the last path segment
+        if not original_filename or '.' not in original_filename:
+            path_parts = [p for p in parsed_url.path.split('/') if p]
+            if path_parts:
+                original_filename = f"{path_parts[-1]}.jpg"
+            else:
+                original_filename = "image.jpg"
+        
+        # Create domain prefix
+        domain_prefix = ""
+        if 'whats-on-mombasa.com' in domain:
+            domain_prefix = "mombasa_"
+        elif 'ticketsasa.com' in domain:
+            domain_prefix = "ticketsasa_"
+        else:
+            # For other domains, use first part of domain
+            domain_prefix = f"{domain.split('.')[0]}_"
+        
+        # Sanitize filename - remove invalid characters
+        safe_filename = re.sub(r'[<>:"/\\|?*]', '_', original_filename)
+        safe_filename = re.sub(r'[^\w\-_\.]', '_', safe_filename)
+        
+        # Combine prefix with sanitized filename
+        final_filename = f"{domain_prefix}{safe_filename}"
+        
+        # Ensure it's not too long (Windows has 260 char path limit)
+        if len(final_filename) > 100:
+            name_part, ext = os.path.splitext(final_filename)
+            final_filename = f"{name_part[:95]}{ext}"
+        
+        return f"full/{final_filename}"
+
     def item_completed(self, results, item, info):
         """Process downloaded images."""
+        # Check if this item contains TicketSasa images (skip enhancement)
+        skip_enhancement_domains = ['ticketsasa.com', 'admin.ticketsasa.com']
+        skip_enhancement = False
+        
+        for ok, x in results:
+            if ok:
+                url = x['url']
+                if any(domain in url for domain in skip_enhancement_domains):
+                    skip_enhancement = True
+                    break
+        
         for ok, x in results:
             if ok:
                 url = x['url']
@@ -254,16 +313,21 @@ class EnhancedImagePipeline(ImagesPipeline):
                 
                 if url not in self.previously_downloaded:
                     # Track new image
-                    self.new_images.append(full_path)
-                    self.logger.info(f"Successfully downloaded new image: {url}")
+                    if not skip_enhancement:
+                        self.new_images.append(full_path)
+                        self.logger.info(f"Successfully downloaded new image: {url}")
+                    else:
+                        self.logger.info(f"Successfully downloaded TicketSasa image (skipping enhancement): {url}")
+                    
                     self.stats['downloaded'] += 1
                     
                     # Record initial status
                     self.image_status[url] = {
                         'path': full_path,
                         'downloaded_at': datetime.now().isoformat(),
-                        'enhanced': False,
-                        'failed': False
+                        'enhanced': skip_enhancement,  # Mark as enhanced if skipping
+                        'failed': False,
+                        'skipped_enhancement': skip_enhancement
                     }
                     self.previously_downloaded.add(url)
                 else:
@@ -324,7 +388,8 @@ class EnhancedImagePipeline(ImagesPipeline):
         self.logger.info(f"Average time per image: {avg_time:.2f} seconds")
         
         # Save statistics
-        with open('pipeline_stats.json', 'w') as f:
+        stats_file = self.base_dir / 'pipeline_stats.json'
+        with open(stats_file, 'w') as f:
             json.dump({
                 'runtime': str(runtime),
                 'total_urls': len(self.all_urls),

@@ -19,7 +19,7 @@ ITEM_PIPELINES = {
 }
 
 # Image storage configuration
-IMAGES_STORE = "downloaded_images"
+IMAGES_STORE = "image_scraper/downloaded_images"
 
 # Optimize for best quality images
 IMAGES_MIN_HEIGHT = 0
