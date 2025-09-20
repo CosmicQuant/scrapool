@@ -14,10 +14,10 @@ from urllib.parse import urljoin, urlparse
 class ImageSpider(scrapy.Spider):
     name = 'image_spider'
     start_urls = [
-        'https://www.whats-on-mombasa.com'
+        'https://www.example.com'
     ]
     # Allowed domains to prevent crawling external sites
-    allowed_domains = ['whats-on-mombasa.com', 'www.whats-on-mombasa.com']
+    allowed_domains = ['example.com', 'www.example.com']
     
     def __init__(self):
         super().__init__()
