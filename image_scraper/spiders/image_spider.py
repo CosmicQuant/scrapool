@@ -14,7 +14,7 @@ from urllib.parse import urljoin, urlparse
 class ImageSpider(scrapy.Spider):
     name = 'image_spider'
     start_urls = [
-        'https://www.example.com'
+        'https://example.com'
     ]
     # Allowed domains to prevent crawling external sites
     allowed_domains = ['example.com', 'www.example.com']
@@ -31,18 +31,18 @@ class ImageSpider(scrapy.Spider):
         'ITEM_PIPELINES': {
             'image_scraper.pipelines.EnhancedImagePipeline': 1,
         },
-    'IMAGES_STORE': r'C:/Users/ADMIN/Desktop/scrape/image_scraper/downloaded_images',
+        'IMAGES_STORE': r'downloaded_images',
         'IMAGES_MIN_HEIGHT': 100,  # Skip small images (icons/buttons)
         'IMAGES_MIN_WIDTH': 100,   # Skip small images (icons/buttons)
         'IMAGES_EXPIRES': 0,     # Never expire images
         'MEDIA_ALLOW_REDIRECTS': True,  # Follow redirects for best quality
         'CONCURRENT_REQUESTS_PER_DOMAIN': 1,  # Be respectful to servers
         'DOWNLOAD_DELAY': 2,  # Reasonable delay for dynamic content
-        'DEPTH_LIMIT': 3,  # Allow 3 levels for better pagination
+        'DEPTH_LIMIT': 5,  # Allow 3 levels for better pagination
         'CLOSESPIDER_PAGECOUNT': 100,  # STOP after processing 100 pages
         'CLOSESPIDER_ITEMCOUNT': 500,  # STOP after finding 500 images
         'DUPEFILTER_DEBUG': True,  # Debug duplicate filtering
-        'WAIFU2X_PATH': r'c:\Users\ADMIN\Desktop\waifu2x-ncnn-vulkan-20250504-windows\waifu2x-ncnn-vulkan-20250504-windows\waifu2x-ncnn-vulkan.exe',  # Path to waifu2x executable
+        'WAIFU2X_PATH': r'waifu2x-ncnn-vulkan.exe',  # Path to waifu2x executable
         'RANDOMIZE_DOWNLOAD_DELAY': True,  # Random delays for better scraping
         'DOWNLOAD_TIMEOUT': 30,  # Longer timeout for lazy loading
         'COOKIES_ENABLED': True,  # Enable cookies for session management
@@ -52,10 +52,13 @@ class ImageSpider(scrapy.Spider):
 
     def load_image_status(self):
         """Load status of all processed images to avoid re-downloading."""
+        import os
+        status_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'image_status.json')
         try:
-            with open('image_status.json', 'r') as f:
+            with open(status_file, 'r') as f:
                 data = json.load(f)
                 image_status = data.get('images', {})
+                # Use direct URLs as keys
                 self.previously_downloaded = set(image_status.keys())
                 self.logger.info(f"Loaded {len(self.previously_downloaded)} previously downloaded images")
         except (FileNotFoundError, json.JSONDecodeError):
@@ -227,10 +230,10 @@ class ImageSpider(scrapy.Spider):
                 if f'{param}=' in current_url:
                     # Extract current page number and try next page
                     import re
-                    match = re.search(f'{param}=(\d+)', current_url)
+                    match = re.search(f'{param}=(\\d+)', current_url)
                     if match:
                         current_page = int(match.group(1))
-                        next_page_url = re.sub(f'{param}=\d+', f'{param}={current_page + 1}', current_url)
+                        next_page_url = re.sub(f'{param}=\\d+', f'{param}={current_page + 1}', current_url)
                         if next_page_url != current_url:
                             self.logger.info(f"Trying next page via URL parameter: {next_page_url}")
                             yield response.follow(next_page_url, callback=self.parse)

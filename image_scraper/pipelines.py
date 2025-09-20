@@ -39,6 +39,20 @@ class RateLimiter:
         self.requests.append(now)
 
 class EnhancedImagePipeline(ImagesPipeline):
+    def save_image_status(self):
+        """Save status of all processed images with normalized keys."""
+        status_file = self.base_dir / 'image_status.json'
+        normalized_status = {self.normalize_url(k): v for k, v in self.image_status.items()}
+        with open(status_file, 'w') as f:
+            json.dump({
+                'images': normalized_status,
+                'last_updated': datetime.now().isoformat(),
+                'stats': {
+                    'total': len(normalized_status),
+                    'enhanced': sum(1 for status in normalized_status.values() if status.get('enhanced')),
+                    'failed': sum(1 for status in normalized_status.values() if status.get('failed'))
+                }
+            }, f, indent=2)
     """Enhanced image pipeline that uses waifu2x's built-in batch processing."""
     
     def __init__(self, store_uri, waifu2x_path=None, *args, **kwargs):
@@ -98,13 +112,9 @@ class EnhancedImagePipeline(ImagesPipeline):
             with open(status_file, 'r') as f:
                 data = json.load(f)
                 self.image_status = data.get('images', {})
-                
-                # Count statistics
                 enhanced = sum(1 for status in self.image_status.values() if status.get('enhanced'))
                 total = len(self.image_status)
                 self.logger.info(f"Loaded status for {total} images ({enhanced} enhanced)")
-                
-                # Convert to set for quick lookup
                 self.previously_downloaded = set(self.image_status.keys())
         except (FileNotFoundError, json.JSONDecodeError):
             self.logger.info("No previous image status found")
@@ -112,8 +122,9 @@ class EnhancedImagePipeline(ImagesPipeline):
             self.previously_downloaded = set()
 
     def save_image_status(self):
-        """Save status of all processed images."""
+        """Save status of all processed images with normalized keys (no double normalization)."""
         status_file = self.base_dir / 'image_status.json'
+        # image_status already uses normalized keys, so save as-is
         with open(status_file, 'w') as f:
             json.dump({
                 'images': self.image_status,
@@ -229,27 +240,29 @@ class EnhancedImagePipeline(ImagesPipeline):
             os.makedirs(output_dir)
 
     def get_media_requests(self, item, info):
-        """Get all images for processing."""
+        """Request only images not already tracked in image_status.json."""
         urls = item.get('image_urls', [])
         self.all_urls.update(urls)
-        
         for url in urls:
-            self.logger.info(f"Queuing image for download: {url}")
-            request = scrapy.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-                'Sec-Fetch-Dest': 'image',
-                'Sec-Fetch-Mode': 'no-cors',
-                'Sec-Fetch-Site': 'cross-site',
-                'Referer': url
-            })
-            self.rate_limiter.wait_if_needed()
-            time.sleep(uniform(0.5, 1.5))
-            yield request
+            if url not in self.image_status:
+                self.logger.info(f"Queuing image for download: {url}")
+                request = scrapy.Request(url, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Sec-Fetch-Dest': 'image',
+                    'Sec-Fetch-Mode': 'no-cors',
+                    'Sec-Fetch-Site': 'cross-site',
+                    'Referer': url
+                })
+                self.rate_limiter.wait_if_needed()
+                time.sleep(uniform(0.5, 1.5))
+                yield request
+            else:
+                self.logger.info(f"Skipping already tracked image: {url}")
 
     def file_path(self, request, response=None, info=None, *, item=None):
         """Generate a meaningful filename with domain prefix and original name."""
@@ -270,10 +283,10 @@ class EnhancedImagePipeline(ImagesPipeline):
         
         # Create domain prefix
         domain_prefix = ""
-        if 'whats-on-mombasa.com' in domain:
-            domain_prefix = "mombasa_"
-        elif 'ticketsasa.com' in domain:
-            domain_prefix = "ticketsasa_"
+        if 'example.com' in domain:
+            domain_prefix = "example_"
+        elif 'test.com' in domain:
+            domain_prefix = "test_"
         else:
             # For other domains, use first part of domain
             domain_prefix = f"{domain.split('.')[0]}_"
@@ -294,8 +307,8 @@ class EnhancedImagePipeline(ImagesPipeline):
 
     def item_completed(self, results, item, info):
         """Process downloaded images."""
-        # Check if this item contains TicketSasa images (skip enhancement)
-        skip_enhancement_domains = ['ticketsasa.com', 'admin.ticketsasa.com']
+        # Check if this item contains images that should skip enhancement (e.g., small icons)
+        skip_enhancement_domains = ['example.com', 'small-images.com']  # Configure domains that typically have small images
         skip_enhancement = False
         
         for ok, x in results:
@@ -310,28 +323,26 @@ class EnhancedImagePipeline(ImagesPipeline):
                 url = x['url']
                 path = x['path']
                 full_path = os.path.join(self.store.basedir, path)
-                
-                if url not in self.previously_downloaded:
-                    # Track new image
+                # Only queue if URL is not already in image_status
+                if url not in self.image_status:
+                    self.logger.info(f"DEBUG: Queuing new image for enhancement: URL={url} | Filename={full_path}")
                     if not skip_enhancement:
                         self.new_images.append(full_path)
                         self.logger.info(f"Successfully downloaded new image: {url}")
                     else:
-                        self.logger.info(f"Successfully downloaded TicketSasa image (skipping enhancement): {url}")
-                    
+                        self.logger.info(f"Successfully downloaded small image (skipping enhancement): {url}")
                     self.stats['downloaded'] += 1
-                    
-                    # Record initial status
                     self.image_status[url] = {
-                        'path': full_path,
-                        'downloaded_at': datetime.now().isoformat(),
+                        'downloaded': True,
                         'enhanced': skip_enhancement,  # Mark as enhanced if skipping
-                        'failed': False,
-                        'skipped_enhancement': skip_enhancement
+                        'file_path': path,  # Store relative path like existing entries
+                        'download_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3],
+                        'filename': os.path.basename(path),
+                        'file_size': os.path.getsize(full_path) if os.path.exists(full_path) else 0,
+                        'domain': url.split('/')[2] if '://' in url else 'unknown'
                     }
-                    self.previously_downloaded.add(url)
                 else:
-                    self.logger.debug(f"Skipping previously downloaded image: {url}")
+                    self.logger.debug(f"Skipping previously tracked image: {url}")
 
         return item
 
@@ -354,18 +365,20 @@ class EnhancedImagePipeline(ImagesPipeline):
                 
                 # Update status for enhanced images
                 for url, status in self.image_status.items():
-                    if status['path'] in self.new_images:
-                        status['enhanced'] = True
-                        status['enhanced_at'] = datetime.now().isoformat()
+                    if 'file_path' in status:
+                        full_path = os.path.join(self.store.basedir, status['file_path'])
+                        if full_path in self.new_images:
+                            status['enhanced'] = True
             else:
                 self.logger.error("Failed to enhance some images")
                 self.stats['failed'] = len(self.new_images)
                 
                 # Mark failed images
                 for url, status in self.image_status.items():
-                    if status['path'] in self.new_images:
-                        status['failed'] = True
-                        status['failed_at'] = datetime.now().isoformat()
+                    if 'file_path' in status:
+                        full_path = os.path.join(self.store.basedir, status['file_path'])
+                        if full_path in self.new_images:
+                            status['enhanced'] = False
         else:
             self.logger.info("No new images to enhance")
             
