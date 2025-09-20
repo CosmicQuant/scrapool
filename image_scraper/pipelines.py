@@ -168,7 +168,7 @@ class EnhancedImagePipeline(ImagesPipeline):
             self.waifu2x_path,
             "-i", input_dir,
             "-o", output_dir,
-            "-n", "1",  # Lower noise reduction level
+                "-n", "2",  # Increased noise reduction level
             "-s", "2",  # Scale factor
             "-t", "32",  # Tile size for memory efficiency
             "-m", models_path,

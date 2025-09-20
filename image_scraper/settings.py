@@ -19,7 +19,7 @@ ITEM_PIPELINES = {
 }
 
 # Image storage configuration
-IMAGES_STORE = "image_scraper/downloaded_images"
+IMAGES_STORE = r"C:/Users/ADMIN/Desktop/scrape/image_scraper/downloaded_images"
 
 # Optimize for best quality images
 IMAGES_MIN_HEIGHT = 0

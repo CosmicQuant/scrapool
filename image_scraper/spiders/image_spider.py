@@ -16,7 +16,6 @@ class ImageSpider(scrapy.Spider):
     start_urls = [
         'https://www.whats-on-mombasa.com'
     ]
-    
     # Allowed domains to prevent crawling external sites
     allowed_domains = ['whats-on-mombasa.com', 'www.whats-on-mombasa.com']
     
@@ -32,7 +31,7 @@ class ImageSpider(scrapy.Spider):
         'ITEM_PIPELINES': {
             'image_scraper.pipelines.EnhancedImagePipeline': 1,
         },
-        'IMAGES_STORE': 'downloaded_images',
+    'IMAGES_STORE': r'C:/Users/ADMIN/Desktop/scrape/image_scraper/downloaded_images',
         'IMAGES_MIN_HEIGHT': 100,  # Skip small images (icons/buttons)
         'IMAGES_MIN_WIDTH': 100,   # Skip small images (icons/buttons)
         'IMAGES_EXPIRES': 0,     # Never expire images
