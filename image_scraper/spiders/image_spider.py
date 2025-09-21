@@ -13,12 +13,9 @@ from urllib.parse import urljoin, urlparse
 
 class ImageSpider(scrapy.Spider):
     name = 'image_spider'
-    start_urls = [
-        'https://whats-on-mombasa.com',
-        'https://ticketsasa.com'
-    ]
+    start_urls = []
     # Allowed domains to prevent crawling external sites
-    allowed_domains = ['whats-on-mombasa.com', 'www.whats-on-mombasa.com', 'ticketsasa.com', 'www.ticketsasa.com']
+    allowed_domains = []
     
     def __init__(self):
         super().__init__()
