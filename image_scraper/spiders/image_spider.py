@@ -14,10 +14,11 @@ from urllib.parse import urljoin, urlparse
 class ImageSpider(scrapy.Spider):
     name = 'image_spider'
     start_urls = [
-        'https://example.com'
+        'https://whats-on-mombasa.com',
+        'https://ticketsasa.com'
     ]
     # Allowed domains to prevent crawling external sites
-    allowed_domains = ['example.com', 'www.example.com']
+    allowed_domains = ['whats-on-mombasa.com', 'www.whats-on-mombasa.com', 'ticketsasa.com', 'www.ticketsasa.com']
     
     def __init__(self):
         super().__init__()
@@ -31,7 +32,7 @@ class ImageSpider(scrapy.Spider):
         'ITEM_PIPELINES': {
             'image_scraper.pipelines.EnhancedImagePipeline': 1,
         },
-        'IMAGES_STORE': r'downloaded_images',
+        'IMAGES_STORE': r'C:/Users/ADMIN/Desktop/scrape/image_scraper/downloaded_images',
         'IMAGES_MIN_HEIGHT': 100,  # Skip small images (icons/buttons)
         'IMAGES_MIN_WIDTH': 100,   # Skip small images (icons/buttons)
         'IMAGES_EXPIRES': 0,     # Never expire images
@@ -42,7 +43,7 @@ class ImageSpider(scrapy.Spider):
         'CLOSESPIDER_PAGECOUNT': 100,  # STOP after processing 100 pages
         'CLOSESPIDER_ITEMCOUNT': 500,  # STOP after finding 500 images
         'DUPEFILTER_DEBUG': True,  # Debug duplicate filtering
-        'WAIFU2X_PATH': r'waifu2x-ncnn-vulkan.exe',  # Path to waifu2x executable
+        'WAIFU2X_PATH': r'c:\Users\ADMIN\Desktop\waifu2x-ncnn-vulkan-20250504-windows\waifu2x-ncnn-vulkan-20250504-windows\waifu2x-ncnn-vulkan.exe',  # Path to waifu2x executable
         'RANDOMIZE_DOWNLOAD_DELAY': True,  # Random delays for better scraping
         'DOWNLOAD_TIMEOUT': 30,  # Longer timeout for lazy loading
         'COOKIES_ENABLED': True,  # Enable cookies for session management

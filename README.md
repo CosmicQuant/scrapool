@@ -49,7 +49,7 @@ WAIFU2X_PATH = r"path\to\your\waifu2x-ncnn-vulkan.exe"
 
 2. Configure target website in `image_scraper/spiders/image_spider.py`:
 ```python
-start_urls = ['https://your-target-website.com']
+start_urls = ['https://example.com']
 ```
 
 ### Usage
@@ -159,8 +159,8 @@ scrapy crawl image_spider
 
 ```python
 # In image_spider.py
-start_urls = ['https://ticketsasa.com/']  # Target website
-allowed_domains = ['ticketsasa.com']      # Stay within domain
+start_urls = ['https://example.com/']  # Target website
+allowed_domains = ['example.com']      # Stay within domain
 ```
 
 ### Advanced Settings
@@ -194,11 +194,6 @@ Check `image_pipeline.log` for detailed operation logs:
 tail -f image_pipeline.log  # Follow logs in real-time
 ```
 
-## Recent Targets Tested
-
-- ✅ **whats-on-mombasa.com**: 108+ images successfully processed
-- ✅ **ticketsasa.com**: 18 new images with event promotional content
-- 🎯 **Performance**: 100% success rate with AI enhancement
 
 ## Contributing
 

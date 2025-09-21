@@ -283,10 +283,10 @@ class EnhancedImagePipeline(ImagesPipeline):
         
         # Create domain prefix
         domain_prefix = ""
-        if 'example.com' in domain:
-            domain_prefix = "example_"
-        elif 'test.com' in domain:
-            domain_prefix = "test_"
+        if 'whats-on-mombasa.com' in domain:
+            domain_prefix = "mombasa_"
+        elif 'ticketsasa.com' in domain:
+            domain_prefix = "ticketsasa_"
         else:
             # For other domains, use first part of domain
             domain_prefix = f"{domain.split('.')[0]}_"
@@ -307,8 +307,8 @@ class EnhancedImagePipeline(ImagesPipeline):
 
     def item_completed(self, results, item, info):
         """Process downloaded images."""
-        # Check if this item contains images that should skip enhancement (e.g., small icons)
-        skip_enhancement_domains = ['example.com', 'small-images.com']  # Configure domains that typically have small images
+        # Check if this item contains TicketSasa images (skip enhancement)
+        skip_enhancement_domains = ['ticketsasa.com', 'admin.ticketsasa.com']
         skip_enhancement = False
         
         for ok, x in results:
@@ -330,7 +330,7 @@ class EnhancedImagePipeline(ImagesPipeline):
                         self.new_images.append(full_path)
                         self.logger.info(f"Successfully downloaded new image: {url}")
                     else:
-                        self.logger.info(f"Successfully downloaded small image (skipping enhancement): {url}")
+                        self.logger.info(f"Successfully downloaded TicketSasa image (skipping enhancement): {url}")
                     self.stats['downloaded'] += 1
                     self.image_status[url] = {
                         'downloaded': True,
