@@ -120,3 +120,5 @@ Icon
 .TemporaryItems
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
+# Ignore PowerShell automation script
+run_spider.ps1

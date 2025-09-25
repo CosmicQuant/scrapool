@@ -308,38 +308,33 @@ class EnhancedImagePipeline(ImagesPipeline):
     def item_completed(self, results, item, info):
         """Process downloaded images."""
         # Check if this item contains TicketSasa images (skip enhancement)
-        skip_enhancement_domains = ['ticketsasa.com', 'admin.ticketsasa.com']
-        skip_enhancement = False
-        
-        for ok, x in results:
-            if ok:
-                url = x['url']
-                if any(domain in url for domain in skip_enhancement_domains):
-                    skip_enhancement = True
-                    break
-        
+        # Only enhance images from whats-on-mombasa.com
+        enhance_domain = 'whats-on-mombasa.com'
+
         for ok, x in results:
             if ok:
                 url = x['url']
                 path = x['path']
                 full_path = os.path.join(self.store.basedir, path)
+                domain = url.split('/')[2] if '://' in url else 'unknown'
+                should_enhance = enhance_domain in domain
                 # Only queue if URL is not already in image_status
                 if url not in self.image_status:
-                    self.logger.info(f"DEBUG: Queuing new image for enhancement: URL={url} | Filename={full_path}")
-                    if not skip_enhancement:
+                    if should_enhance:
+                        self.logger.info(f"DEBUG: Queuing new image for enhancement: URL={url} | Filename={full_path}")
                         self.new_images.append(full_path)
-                        self.logger.info(f"Successfully downloaded new image: {url}")
+                        self.logger.info(f"Successfully downloaded new image (will be enhanced): {url}")
                     else:
-                        self.logger.info(f"Successfully downloaded TicketSasa image (skipping enhancement): {url}")
+                        self.logger.info(f"Successfully downloaded image (no enhancement): {url}")
                     self.stats['downloaded'] += 1
                     self.image_status[url] = {
                         'downloaded': True,
-                        'enhanced': skip_enhancement,  # Mark as enhanced if skipping
-                        'file_path': path,  # Store relative path like existing entries
+                        'enhanced': should_enhance,  # Only mark as enhanced if from whats-on-mombasa.com
+                        'file_path': path,
                         'download_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3],
                         'filename': os.path.basename(path),
                         'file_size': os.path.getsize(full_path) if os.path.exists(full_path) else 0,
-                        'domain': url.split('/')[2] if '://' in url else 'unknown'
+                        'domain': domain
                     }
                 else:
                     self.logger.debug(f"Skipping previously tracked image: {url}")

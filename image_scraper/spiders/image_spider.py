@@ -18,12 +18,17 @@ class ImageSpider(scrapy.Spider):
     def __init__(self, start_url=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if start_url:
-            self.start_urls = [start_url]
-            # Set allowed_domains from start_url
-            domain = urlparse(start_url).netloc.lower()
-            if domain.startswith('www.'):
-                domain = domain[4:]
-            self.allowed_domains = [domain, f"www.{domain}"]
+            # Accept comma-separated list of URLs
+            urls = [u.strip() for u in start_url.split(',') if u.strip()]
+            self.start_urls = urls
+            # Set allowed_domains for each domain
+            domains = []
+            for u in urls:
+                domain = urlparse(u).netloc.lower()
+                if domain.startswith('www.'):
+                    domain = domain[4:]
+                domains.extend([domain, f"www.{domain}"])
+            self.allowed_domains = list(set(domains))
         else:
             self.start_urls = ["https://www.example.com/"]
             self.allowed_domains = ["example.com", "www.example.com"]
