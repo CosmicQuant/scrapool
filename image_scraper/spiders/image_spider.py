@@ -13,12 +13,20 @@ from urllib.parse import urljoin, urlparse
 
 class ImageSpider(scrapy.Spider):
     name = 'image_spider'
-    start_urls = []
-    # Allowed domains to prevent crawling external sites
     allowed_domains = []
-    
-    def __init__(self):
-        super().__init__()
+
+    def __init__(self, start_url=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if start_url:
+            self.start_urls = [start_url]
+            # Set allowed_domains from start_url
+            domain = urlparse(start_url).netloc.lower()
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            self.allowed_domains = [domain, f"www.{domain}"]
+        else:
+            self.start_urls = ["https://www.example.com/"]
+            self.allowed_domains = ["example.com", "www.example.com"]
         self.found_image_urls = set()  # Track found URLs to avoid duplicates
         self.pages_processed = 0       # Track processed pages
         self.max_pages = 20           # Limit pages to process
@@ -48,6 +56,18 @@ class ImageSpider(scrapy.Spider):
         'RETRY_TIMES': 3,         # Retry failed requests 3 times
     }
 
+    def normalize_url(self, url):
+        """Normalize URL to https, remove trailing slash, and strip 'www.' from domain."""
+        if not url:
+            return url
+        parts = urlparse(url)
+        scheme = 'https'
+        netloc = parts.netloc.lower()
+        if netloc.startswith('www.'):
+            netloc = netloc[4:]
+        path = parts.path.rstrip('/')
+        return f"{scheme}://{netloc}{path}"
+
     def load_image_status(self):
         """Load status of all processed images to avoid re-downloading."""
         import os
@@ -56,9 +76,9 @@ class ImageSpider(scrapy.Spider):
             with open(status_file, 'r') as f:
                 data = json.load(f)
                 image_status = data.get('images', {})
-                # Use direct URLs as keys
-                self.previously_downloaded = set(image_status.keys())
-                self.logger.info(f"Loaded {len(self.previously_downloaded)} previously downloaded images")
+                # Normalize all URLs
+                self.previously_downloaded = set(self.normalize_url(u) for u in image_status.keys())
+                self.logger.info(f"Loaded {len(self.previously_downloaded)} previously downloaded images (normalized)")
         except (FileNotFoundError, json.JSONDecodeError):
             self.logger.info("No previous image status found - starting fresh")
             self.previously_downloaded = set()
@@ -102,15 +122,17 @@ class ImageSpider(scrapy.Spider):
                     
                     # Convert relative URLs to absolute URLs
                     absolute_url = urljoin(response.url, image_src)
-                    if (self.is_valid_image_url(absolute_url) and 
-                        absolute_url not in self.found_image_urls and
-                        absolute_url not in self.previously_downloaded):
-                        self.found_image_urls.add(absolute_url)
-                        image_urls.append(absolute_url)
-                        new_images_found += 1
-                        self.logger.info(f"Found NEW image: {absolute_url}")
-                    elif absolute_url in self.previously_downloaded:
-                        self.logger.debug(f"Skipping already downloaded image: {absolute_url}")
+                    norm_url = self.normalize_url(absolute_url)
+                    if self.is_valid_image_url(absolute_url):
+                        if norm_url in self.previously_downloaded:
+                            self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already downloaded")
+                        elif norm_url in self.found_image_urls:
+                            self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already found in this crawl")
+                        else:
+                            self.found_image_urls.add(norm_url)
+                            image_urls.append(absolute_url)
+                            new_images_found += 1
+                            self.logger.info(f"QUEUE: {absolute_url} (normalized: {norm_url}) -- New image")
         
         # Look for images in various container elements that might use lazy loading
         lazy_containers = [
@@ -131,28 +153,34 @@ class ImageSpider(scrapy.Spider):
                     image_src = element.css(attr).get()
                     if image_src:
                         absolute_url = urljoin(response.url, image_src)
-                        if (self.is_valid_image_url(absolute_url) and 
-                            absolute_url not in self.found_image_urls and
-                            absolute_url not in self.previously_downloaded):
-                            self.found_image_urls.add(absolute_url)
-                            image_urls.append(absolute_url)
-                            new_images_found += 1
-                            self.logger.info(f"Found NEW lazy-loaded image: {absolute_url}")
+                        norm_url = self.normalize_url(absolute_url)
+                        if self.is_valid_image_url(absolute_url):
+                            if norm_url in self.previously_downloaded:
+                                self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already downloaded")
+                            elif norm_url in self.found_image_urls:
+                                self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already found in this crawl")
+                            else:
+                                self.found_image_urls.add(norm_url)
+                                image_urls.append(absolute_url)
+                                new_images_found += 1
+                                self.logger.info(f"QUEUE: {absolute_url} (normalized: {norm_url}) -- New image")
                         break
         
         # Find direct image links in <a> tags
         for link in response.css('a::attr(href)').getall():
             if link:
                 absolute_url = urljoin(response.url, link)
-                if (self.is_valid_image_url(absolute_url) and 
-                    absolute_url not in self.found_image_urls and
-                    absolute_url not in self.previously_downloaded):
-                    self.found_image_urls.add(absolute_url)
-                    image_urls.append(absolute_url)
-                    new_images_found += 1
-                    self.logger.info(f"Found NEW image link: {absolute_url}")
-                elif absolute_url in self.previously_downloaded:
-                    self.logger.debug(f"Skipping already downloaded image link: {absolute_url}")
+                norm_url = self.normalize_url(absolute_url)
+                if self.is_valid_image_url(absolute_url):
+                    if norm_url in self.previously_downloaded:
+                        self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already downloaded")
+                    elif norm_url in self.found_image_urls:
+                        self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already found in this crawl")
+                    else:
+                        self.found_image_urls.add(norm_url)
+                        image_urls.append(absolute_url)
+                        new_images_found += 1
+                        self.logger.info(f"QUEUE: {absolute_url} (normalized: {norm_url}) -- New image")
         
         # Look for lazy-loaded images in background-image styles
         for element in response.css('[style*="background-image"]'):
@@ -164,13 +192,17 @@ class ImageSpider(scrapy.Spider):
                 if url_match:
                     image_src = url_match.group(1)
                     absolute_url = urljoin(response.url, image_src)
-                    if (self.is_valid_image_url(absolute_url) and 
-                        absolute_url not in self.found_image_urls and
-                        absolute_url not in self.previously_downloaded):
-                        self.found_image_urls.add(absolute_url)
-                        image_urls.append(absolute_url)
-                        new_images_found += 1
-                        self.logger.info(f"Found NEW background image: {absolute_url}")
+                    norm_url = self.normalize_url(absolute_url)
+                    if self.is_valid_image_url(absolute_url):
+                        if norm_url in self.previously_downloaded:
+                            self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already downloaded")
+                        elif norm_url in self.found_image_urls:
+                            self.logger.info(f"SKIP: {absolute_url} (normalized: {norm_url}) -- Already found in this crawl")
+                        else:
+                            self.found_image_urls.add(norm_url)
+                            image_urls.append(absolute_url)
+                            new_images_found += 1
+                            self.logger.info(f"QUEUE: {absolute_url} (normalized: {norm_url}) -- New image")
         
         # Yield images if any NEW ones found on this page
         if image_urls:
